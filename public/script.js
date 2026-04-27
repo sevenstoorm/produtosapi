@@ -1,252 +1,338 @@
 // ========================================
-// ESTADO GLOBAL
+// VARIÁVEIS GLOBAIS
 // ========================================
+
 let produtoEmEdicao = null;
 
 // ========================================
-// UTILIDADES
+// FUNÇÕES AUXILIARES
 // ========================================
-function mostrarMensagem(texto) {
+
+// Mostra uma mensagem modal
+function mostrarMensagem(mensagem, tipo = 'info') {
     const modal = document.getElementById('modalMessage');
-    document.getElementById('modalText').textContent = texto;
+    const modalText = document.getElementById('modalText');
+    
+    modalText.textContent = mensagem;
     modal.style.display = 'flex';
+    
+    // Define a cor baseado no tipo
+    if (tipo === 'sucesso') {
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    } else if (tipo === 'erro') {
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    }
 }
 
+// Fecha o modal de mensagens
 function fecharModal() {
     document.getElementById('modalMessage').style.display = 'none';
 }
 
+// Limpa o formulário
 function limparFormulario() {
     document.getElementById('clientForm').reset();
     produtoEmEdicao = null;
-    document.querySelector('.form-section h2').textContent = 'Adicionar Produto';
+    document.querySelector('.form-section h2').textContent = 'Adicionar ou Editar Produto';
+}
+
+// Formata Preco para exibição
+function formatarPreco(Preco) {
+    if (!Preco) return '';
+    return Preco.toFixed(2).replace('.', ',');
+}
+
+// Formata estoque para exibição
+function formatarEstoque(estoque) {
+    if (!estoque) return '';
+    return estoque.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
 // ========================================
-// API
+// OPERAÇÕES COM A API
 // ========================================
-async function request(url, options = {}) {
-    const response = await fetch(url, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-        });
 
-    if (!response.ok) {
-            let erro = 'Erro na requisição';
-            try {
-                        const data = await response.json();
-                        erro = data.error || erro;
-                    } catch {}
-              throw new Error(erro);
-          }
-
-      return response.json();
-}
-
-// ========================================
-// CRUD
-// ========================================
+// Busca todos os clientes
 async function carregarProdutos() {
-    toggleLoading(true);
-
+    const loadingMessage = document.getElementById('loadingMessage');
+    const emptyMessage = document.getElementById('emptyMessage');
+    const produtosList = document.getElementById('produtosList');
+    
+    loadingMessage.style.display = 'block';
+    produtosList.innerHTML = '';
+    
     try {
-            const produtos = await request('/produtos');
-            renderTabela(produtos);
-        } catch (err) {
-                mostrarMensagem(err.message);
-            } finally {
-                    toggleLoading(false);
-                }
+        const resposta = await fetch('/produtos');
+        
+        if (!resposta.ok) {
+            throw new Error('Erro ao buscar produtos');
+        }
+        
+        const produtos = await resposta.json();
+        loadingMessage.style.display = 'none';
+        
+        if (produtos.length === 0) {
+            emptyMessage.style.display = 'block';
+            produtosList.innerHTML = '';
+        } else {
+            emptyMessage.style.display = 'none';
+            exibirTabela(produtos);
+        }
+    } catch (erro) {
+        loadingMessage.style.display = 'none';
+        emptyMessage.style.display = 'block';
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro ao carregegar os produtos. Tente novamente.', 'erro');
+    }
 }
 
+// Cria um novo produto
 async function criarProduto(dados) {
     try {
-            await request('/produtos', {
-                        method: 'POST',
-                        body: JSON.stringify(dados)
-                    });
-
-            mostrarMensagem('Produto criado com sucesso!');
-            limparFormulario();
-            carregarProdutos();
-        } catch (err) {
-                mostrarMensagem(err.message);
-            }
+        const resposta = await fetch('/produtos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+        
+        if (!resposta.ok) {
+            const erro = await resposta.json();
+            throw new Error(erro.error || 'Erro ao criar produto');
+        }
+        
+        const novoProduto = await resposta.json();
+        mostrarMensagem('Produto cadastrado com sucesso!', 'sucesso');
+        limparFormulario();
+        carregarProdutos();
+    } catch (erro) {
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro: ' + erro.message, 'erro');
+    }
 }
 
+// Atualiza um produto
 async function atualizarProduto(id, dados) {
     try {
-            await request(`/produtos/${id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(dados)
-                    });
-
-            mostrarMensagem('Produto atualizado!');
-            limparFormulario();
-            carregarProdutos();
-        } catch (err) {
-                mostrarMensagem(err.message);
-            }
+        const resposta = await fetch(`/produtos/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+        
+        if (!resposta.ok) {
+            const erro = await resposta.json();
+            throw new Error(erro.error || 'Erro ao atualizar produto');
+        }
+        
+        const produtoAtualizado = await resposta.json();
+        mostrarMensagem('Produto atualizado com sucesso!', 'sucesso');
+        limparFormulario();
+        carregarProdutos();
+        
+    } catch (erro) {
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro: ' + erro.message, 'erro');
+    }
 }
 
+// Deleta um produto
 async function deletarProduto(id) {
-    if (!confirm('Deseja deletar este produto?')) return;
-
+    if (!confirm('Tem certeza que deseja deletar este produto?')) {
+        return;
+    }
+    
     try {
-            await request(`/produtos/${id}`, {
-                        method: 'DELETE'
-                    });
-
-            mostrarMensagem('Produto deletado!');
-            carregarProdutos();
-        } catch (err) {
-                mostrarMensagem(err.message);
-            }
+        const resposta = await fetch(`/produtos/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!resposta.ok) {
+            const erro = await resposta.json();
+            throw new Error(erro.error || 'Erro ao deletar produto');
+        }
+        
+        mostrarMensagem('Produto removido com sucesso!', 'sucesso');
+        carregarProdutos();
+        
+    } catch (erro) {
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro: ' + erro.message, 'erro');
+    }
 }
 
 // ========================================
-// RENDERIZAÇÃO
+// EXIBIÇÃO DE DADOS
 // ========================================
-function renderTabela(produtos) {
-    const container = document.getElementById('clientsList');
-    const empty = document.getElementById('emptyMessage');
 
-    if (!produtos.length) {
-            empty.style.display = 'block';
-            container.innerHTML = '';
-            return;
+// Exibe a tabela de produtos
+function exibirTabela(produtos) {
+    const produtosList = document.getElementById('produtosList');
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                    <th>Estoque</th>
+                    <th>Categoria</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    produtos.forEach(produto => {
+        html += `
+            <tr>
+                <td>#${produto.id}</td>
+                <td>${produto.nome}</td>
+                <td>R$ ${parseFloat(produto.preco).toFixed(2)}</td>
+                <td>${produto.estoque}</td>
+                <td>${produto.categoria}</td>
+                <td class="acoes">
+                    <button class="btn btn-edit" onclick="editarProduto(${produto.id}, '${produto.nome}', ${produto.preco}, ${produto.estoque}, '${produto.categoria}')">✏️ Editar</button>
+                    <button class="btn btn-danger" onclick="deletarProduto(${produto.id})">🗑️ Deletar</button>
+                </td>
+            </tr>
+        `;
+    });
+    html += `
+            </tbody>
+        </table>
+    `;
+    produtosList.innerHTML = html;
+}
+
+// Carrega os dados do produto no formulário para edição
+function editarProduto(id, nome, preco, estoque, categoria) {
+    produtoEmEdicao = id;
+    document.getElementById('nome').value = nome;
+    document.getElementById('preco').value = preco;
+    document.getElementById('estoque').value = estoque;
+    document.getElementById('categoria').value = categoria;
+    document.querySelector('.form-section h2').textContent = `Editando Produto #${id}`;
+    // Scroll até o formulário
+    document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ========================================
+// BUSCA E FILTRO
+// ========================================
+
+// Busca produtos no backend
+async function buscarProdutos(tipo, valor) {
+    const loadingMessage = document.getElementById('loadingMessage');
+    const emptyMessage = document.getElementById('emptyMessage');
+    const produtosList = document.getElementById('produtosList');
+   
+    loadingMessage.style.display = 'block';
+    produtosList.innerHTML = '';
+   
+    try {
+        let url = '';
+
+        if (tipo === 'nome') {
+            url = `/produtos/nome/${encodeURIComponent(valor)}`;
+        } else if (tipo === 'id') {
+            url = `/produtos/${valor}`;
         }
 
-      empty.style.display = 'none';
+        const resposta = await fetch(url);
+       
+        if (!resposta.ok) {
+            throw new Error('Erro ao buscar produtos');
+        }
+       
+        let produtos = await resposta.json();
 
-      container.innerHTML = `
-              <table>
-                          <thead>
-                                          <tr>
-                                                              <th>ID</th>
-                                                                                  <th>Nome</th>
-                                                                                                      <th>Preço</th>
-                                                                                                                          <th>Estoque</th>
-                                                                                                                                              <th>Categoria</th>
-                                                                                                                                                                  <th>Ações</th>
-                                                                                                                                                                                  </tr>
-                                                                                                                                                                                              </thead>
-                                                                                                                                                                                                          <tbody>
-                                                                                                                                                                                                                          ${produtos.map(p => `
-                                                                                                                                                                                                                                              <tr>
-                                                                                                                                                                                                                                                                      <td>#${p.id}</td>
-                                                                                                                                                                                                                                                                                              <td>${p.nome}</td>
-                                                                                                                                                                                                                                                                                                                      <td>R$ ${Number(p.preco).toFixed(2)}</td>
-                                                                                                                                                                                                                                                                                                                                              <td>${p.estoque}</td>
-                                                                                                                                                                                                                                                                                                                                                                      <td>${p.categoria}</td>
-                                                                                                                                                                                                                                                                                                                                                                                              <td>
-                                                                                                                                                                                                                                                                                                                                                                                                                          <button onclick="editarProduto(${p.id})">✏️</button>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                      <button onclick="deletarProduto(${p.id})">🗑️</button>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                              </td>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </tr>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  `).join('')}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              </tbody>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </table>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          `;
-}
+        if (!Array.isArray(produtos)) {
+            produtos = produtos ? [produtos] : [];
+        }
 
-// ========================================
-// EDIÇÃO
-// ========================================
-function editarProduto(id) {
-    fetch(`/produtos/${id}`)
-        .then(res => res.json())
-        .then(produto => {
-                    produtoEmEdicao = id;
-
-                    document.getElementById('nome').value = produto.nome;
-                    document.getElementById('preco').value = produto.preco;
-                    document.getElementById('estoque').value = produto.estoque;
-                    document.getElementById('categoria').value = produto.categoria;
-
-                    document.querySelector('.form-section h2').textContent =
-                        `Editando Produto #${id}`;
-
-                    document.querySelector('.form-section')
-                        .scrollIntoView({ behavior: 'smooth' });
-                });
-}
-
-// ========================================
-// BUSCA
-// ========================================
-async function buscarProdutos(tipo, valor) {
-    toggleLoading(true);
-
-    try {
-            let url = tipo === 'nome'
-                ? `/produtos/nome/${encodeURIComponent(valor)}`
-                : `/produtos/${valor}`;
-
-            let resultado = await request(url);
-
-            if (!Array.isArray(resultado)) {
-                        resultado = resultado ? [resultado] : [];
-                    }
-
-              renderTabela(resultado);
-          } catch (err) {
-                  mostrarMensagem(err.message);
-              } finally {
-                      toggleLoading(false);
-                  }
-}
-
-function filtrarProdutos() {
-    const valor = document.getElementById('searchInput').value.trim();
-    const tipo = document.getElementById('searchType').value;
-
-    if (!valor) {
-            carregarProdutos();
+        loadingMessage.style.display = 'none';
+       
+        if (produtos.length === 0) {
+            emptyMessage.style.display = 'block';
+            produtosList.innerHTML = '';
         } else {
-                buscarProdutos(tipo, valor);
-            }
+            emptyMessage.style.display = 'none';
+            exibirTabela(produtos);
+        }
+    } catch (erro) {
+        loadingMessage.style.display = 'none';
+        emptyMessage.style.display = 'block';
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro ao buscar os produtos. Tente novamente.', 'erro');
+    }
+}
+
+// Filtra produtos pela busca (agora busca no backend)
+function filtrarProdutos() {
+    const searchInput = document.getElementById('searchInput');
+    const searchType = document.getElementById('searchType');
+    const valor = searchInput.value.trim();
+    
+    if (valor === '') {
+        // Se vazio, carrega todos
+        carregarProdutos();
+    } else {
+        // Busca no backend
+        buscarProdutos(searchType.value, valor);
+    }
 }
 
 // ========================================
-// UI
+// EVENT LISTENERS
 // ========================================
-function toggleLoading(show) {
-    document.getElementById('loadingMessage').style.display = show ? 'block' : 'none';
-}
 
-// ========================================
-// EVENTOS
-// ========================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
+    // Carrega os produtos ao abrir a página
     carregarProdutos();
-
-    document.getElementById('clientForm').addEventListener('submit', e => {
-            e.preventDefault();
-
-            const dados = {
-                        nome: nome.value.trim(),
-                        preco: preco.value,
-                        estoque: estoque.value,
-                        categoria: categoria.value.trim()
-                    };
-
-            if (produtoEmEdicao) {
-                        atualizarProduto(produtoEmEdicao, dados);
-                    } else {
-                                criarProduto(dados);
-                            }
-        });
-
-      btnLimpar.addEventListener('click', limparFormulario);
-      btnRecarregar.addEventListener('click', carregarProdutos);
-      btnBuscar.addEventListener('click', filtrarProdutos);
-
-      searchInput.addEventListener('keyup', e => {
-              if (e.key === 'Enter') filtrarProdutos();
-          });
-
-      modalMessage.addEventListener('click', e => {
-              if (e.target === modalMessage) fecharModal();
-          });
+    
+    // Formulário de envio
+    document.getElementById('clientForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const nome = document.getElementById('nome').value.trim();
+        const preco = document.getElementById('preco').value.trim();
+        const estoque = document.getElementById('estoque').value.trim();
+        const categoria = document.getElementById('categoria').value.trim();
+        // Validação básica
+        if (!nome || !preco || !estoque || !categoria) {
+            mostrarMensagem('Por favor, preencha todos os campos!', 'erro');
+            return;
+        }
+        const dados = { nome, preco, estoque, categoria };
+        if (produtoEmEdicao) {
+            atualizarProduto(produtoEmEdicao, dados);
+        } else {
+            criarProduto(dados);
+        }
+    });
+    
+    // Botão Limpar Formulário
+    document.getElementById('btnLimpar').addEventListener('click', limparFormulario);
+    
+    // Botão Recarregar Lista
+    document.getElementById('btnRecarregar').addEventListener('click', carregarProdutos);
+    
+    // Botão Buscar
+    document.getElementById('btnBuscar').addEventListener('click', filtrarProdutos);
+    
+    // Busca em tempo real (opcional, pode ser removido se quiser apenas botão)
+    document.getElementById('searchInput').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            filtrarProdutos();
+        }
+    });
+    
+    // Fechar modal ao clicar fora
+    document.getElementById('modalMessage').addEventListener('click', function(e) {
+        if (e.target === this) {
+            fecharModal();
+        }
+    });
 });

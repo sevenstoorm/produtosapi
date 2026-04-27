@@ -362,6 +362,12 @@ table tbody tr:nth-child(even) {
     color: #333333;
 }
 
+.botao {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+}
+
 /* ========================================
    RODAPÉ
    ======================================== */
